@@ -1,4 +1,5 @@
 import asyncio
+import time
 from typing import Optional
 from django.conf import settings
 
@@ -9,10 +10,55 @@ except ImportError:
     GEMINI_AVAILABLE = False
 
 
+class RateLimiter:
+    """Gemini 무료 API 레이트 리미터 (15 RPM 제한)"""
+
+    def __init__(self, max_calls: int = 10, period: float = 60.0):
+        self.max_calls = max_calls  # 분당 최대 호출 수 (여유있게 10)
+        self.period = period
+        self.calls = []
+        self.backoff_until = 0  # 백오프 종료 시간
+
+    def can_call(self) -> bool:
+        """API 호출 가능 여부"""
+        now = time.time()
+
+        # 백오프 중인지 확인
+        if now < self.backoff_until:
+            return False
+
+        # 오래된 호출 기록 제거
+        self.calls = [t for t in self.calls if now - t < self.period]
+
+        return len(self.calls) < self.max_calls
+
+    def record_call(self):
+        """호출 기록"""
+        self.calls.append(time.time())
+
+    def trigger_backoff(self, seconds: float = 30.0):
+        """레이트 리밋 발생 시 백오프"""
+        self.backoff_until = time.time() + seconds
+
+    def time_until_next(self) -> float:
+        """다음 호출까지 대기 시간"""
+        now = time.time()
+        if now < self.backoff_until:
+            return self.backoff_until - now
+        if len(self.calls) < self.max_calls:
+            return 0
+        oldest = min(self.calls)
+        return max(0, self.period - (now - oldest))
+
+
 class LLMService:
     """
     Google Gemini API를 사용한 AI 피드백 생성 서비스
+    레이트 리미팅 포함 (무료 API 제한 대응)
     """
+
+    # 클래스 레벨 레이트 리미터 (모든 인스턴스 공유)
+    _rate_limiter = RateLimiter(max_calls=10, period=60.0)
 
     def __init__(self):
         self.api_key = settings.GOOGLE_API_KEY
@@ -20,10 +66,7 @@ class LLMService:
 
         if GEMINI_AVAILABLE and self.api_key:
             genai.configure(api_key=self.api_key)
-            # Use gemini-2.0-flash or gemini-1.5-flash-latest
-                # 기존
-# 추천 (속도/비용 최적화)
-            self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
+            self.model = genai.GenerativeModel('gemini-2.0-flash')
 
         # 추가 학습 정보 제공 프롬프트
         self.system_prompt = """당신은 실시간 강의 학습 보조 AI입니다.
@@ -44,6 +87,7 @@ class LLMService:
     async def generate_feedback(self, context: str, cache_context: dict = None) -> Optional[str]:
         """
         캐시된 맥락을 활용한 실시간 추가 학습 정보 생성
+        레이트 리미팅 적용
         """
         if not GEMINI_AVAILABLE:
             return self._fallback_response(context)
@@ -51,17 +95,21 @@ class LLMService:
         if not self.api_key or not self.model:
             return self._fallback_response(context)
 
+        # 레이트 리밋 체크
+        if not self._rate_limiter.can_call():
+            wait_time = self._rate_limiter.time_until_next()
+            print(f'[Rate Limit] API 호출 대기 중... {wait_time:.1f}초')
+            return None  # 호출 건너뛰기
+
         try:
             # 캐시에서 맥락 정보 추출
             context_hints = []
             if cache_context:
-                # 주요 주제 (빈도순)
                 topics = cache_context.get('top_topics', [])
                 if topics:
                     topic_str = ', '.join([f"{t[0]}" for t in topics[:5]])
                     context_hints.append(f"지금까지 주요 주제: {topic_str}")
 
-                # 이전 피드백 (중복 방지)
                 last_feedback = cache_context.get('last_feedback')
                 if last_feedback:
                     context_hints.append(f"이전 피드백 요약: {last_feedback[:80]}...")
@@ -77,13 +125,16 @@ class LLMService:
 
 추가 학습 정보 (이전 피드백과 중복되지 않게):"""
 
+            # 호출 기록
+            self._rate_limiter.record_call()
+
             # Run in thread pool to avoid blocking
             response = await asyncio.to_thread(
                 self.model.generate_content,
                 prompt,
                 generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=300,  # 코드 예시 포함을 위해 증가
-                    temperature=0.7  # 다양한 정보 제공
+                    max_output_tokens=300,
+                    temperature=0.7
                 )
             )
 
@@ -93,6 +144,12 @@ class LLMService:
             return None
 
         except Exception as e:
+            error_msg = str(e).lower()
+            # 레이트 리밋 에러 감지
+            if 'rate' in error_msg or 'quota' in error_msg or '429' in error_msg:
+                print(f'[Rate Limit] API 제한 감지, 30초 백오프')
+                self._rate_limiter.trigger_backoff(30.0)
+                return None
             print(f'LLM 피드백 생성 오류: {str(e)}')
             return self._fallback_response(context)
 

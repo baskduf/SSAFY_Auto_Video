@@ -19,8 +19,8 @@ class StreamConsumer(AsyncWebsocketConsumer):
         self.is_streaming = False
         self.transcript_buffer = []
         self.last_feedback_time = 0
-        self.feedback_interval = 12  # 더 빠른 피드백 (20초 → 12초)
-        self.min_words_for_feedback = 20  # 최소 단어 수 대폭 완화 (50 → 20)
+        self.feedback_interval = 20  # API 제한 고려 (분당 10회 = 6초마다 가능하지만 여유있게)
+        self.min_words_for_feedback = 30  # 의미있는 컨텐츠 확보
         self.start_time = 0
 
     async def connect(self):
@@ -105,19 +105,22 @@ class StreamConsumer(AsyncWebsocketConsumer):
                         'timestamp': elapsed
                     }))
 
-                    # 스마트 피드백 트리거 (더 공격적인 실시간 피드백)
+                    # 스마트 피드백 트리거 (API 제한 고려)
                     current_time = time.time()
                     time_since_last = current_time - self.last_feedback_time
                     topic_changed = analysis.get('topic_changed', False)
                     has_new_keywords = len(analysis.get('keywords', [])) >= 3
 
-                    # 조건 1: 시간 간격 충족
-                    # 조건 2: 주제 변화 감지 (5초 이상 경과)
-                    # 조건 3: 새 키워드 3개 이상 (8초 이상 경과)
+                    # 최소 10초 간격 보장 (API 레이트 리밋 보호)
+                    min_interval = 10
+
+                    # 조건 1: 기본 시간 간격 충족 (20초)
+                    # 조건 2: 주제 변화 감지 (10초 이상 경과)
+                    # 조건 3: 새 키워드 3개 이상 (15초 이상 경과)
                     should_trigger = (
                         time_since_last >= self.feedback_interval or
-                        (topic_changed and time_since_last >= 5) or
-                        (has_new_keywords and time_since_last >= 8)
+                        (topic_changed and time_since_last >= min_interval) or
+                        (has_new_keywords and time_since_last >= 15)
                     )
 
                     if should_trigger:
