@@ -6,6 +6,7 @@ from django.conf import settings
 from .services.audio_processor import AudioProcessor
 from .services.stt_service import SimplifiedSTTService
 from .services.llm_service import LLMService
+from .services.context_cache import ContextCache
 
 
 class StreamConsumer(AsyncWebsocketConsumer):
@@ -14,18 +15,19 @@ class StreamConsumer(AsyncWebsocketConsumer):
         self.audio_processor = None
         self.stt_service = None
         self.llm_service = None
+        self.context_cache = None  # 컨텍스트 캐시
         self.is_streaming = False
         self.transcript_buffer = []
-        self.context_window = []
         self.last_feedback_time = 0
-        self.feedback_interval = 45  # 토큰 절약: 25초 → 45초
-        self.min_words_for_feedback = 100  # 최소 단어 수 이상일 때만 피드백
+        self.feedback_interval = 12  # 더 빠른 피드백 (20초 → 12초)
+        self.min_words_for_feedback = 20  # 최소 단어 수 대폭 완화 (50 → 20)
         self.start_time = 0
 
     async def connect(self):
         await self.accept()
         self.stt_service = SimplifiedSTTService()
         self.llm_service = LLMService()
+        self.context_cache = ContextCache(max_history=50)
         await self.send(text_data=json.dumps({
             'type': 'connection',
             'status': 'connected',
@@ -60,7 +62,7 @@ class StreamConsumer(AsyncWebsocketConsumer):
 
         self.is_streaming = True
         self.transcript_buffer = []
-        self.context_window = []
+        self.context_cache.reset()  # 캐시 초기화
         self.start_time = time.time()
         self.last_feedback_time = self.start_time
 
@@ -91,25 +93,38 @@ class StreamConsumer(AsyncWebsocketConsumer):
 
                 if transcript and transcript.strip():
                     self.transcript_buffer.append(transcript)
-                    self.context_window.append(transcript)
 
-                    # Keep context window manageable (last ~5 minutes)
-                    if len(self.context_window) > 100:
-                        self.context_window = self.context_window[-80:]
+                    # 컨텍스트 캐시에 추가 및 분석
+                    elapsed = time.time() - self.start_time
+                    analysis = self.context_cache.add_transcript(transcript, elapsed)
 
                     # Send transcript to client
-                    elapsed = time.time() - self.start_time
                     await self.send(text_data=json.dumps({
                         'type': 'transcript',
                         'text': transcript,
                         'timestamp': elapsed
                     }))
 
-                    # Check if we should generate feedback
+                    # 스마트 피드백 트리거 (더 공격적인 실시간 피드백)
                     current_time = time.time()
-                    if current_time - self.last_feedback_time >= self.feedback_interval:
-                        asyncio.create_task(self.generate_feedback())
-                        self.last_feedback_time = current_time
+                    time_since_last = current_time - self.last_feedback_time
+                    topic_changed = analysis.get('topic_changed', False)
+                    has_new_keywords = len(analysis.get('keywords', [])) >= 3
+
+                    # 조건 1: 시간 간격 충족
+                    # 조건 2: 주제 변화 감지 (5초 이상 경과)
+                    # 조건 3: 새 키워드 3개 이상 (8초 이상 경과)
+                    should_trigger = (
+                        time_since_last >= self.feedback_interval or
+                        (topic_changed and time_since_last >= 5) or
+                        (has_new_keywords and time_since_last >= 8)
+                    )
+
+                    if should_trigger:
+                        trigger = self.context_cache.should_generate_feedback(self.min_words_for_feedback)
+                        if trigger.get('should', False):
+                            asyncio.create_task(self.generate_feedback())
+                            self.last_feedback_time = current_time
 
         except asyncio.CancelledError:
             pass
@@ -119,28 +134,23 @@ class StreamConsumer(AsyncWebsocketConsumer):
             self.is_streaming = False
             await self.send_status('stopped', '스트리밍 종료')
 
-            # Generate final summary if we have content
-            if len(self.transcript_buffer) > 5:
-                await self.generate_summary()
-
     async def generate_feedback(self):
-        """Generate AI feedback based on context (토큰 절약 로직 포함)"""
-        if not self.context_window or len(self.context_window) < 3:
-            return
+        """컨텍스트 캐시 기반 실시간 AI 피드백 생성"""
+        # 캐시에서 전체 컨텍스트 가져오기
+        cache_ctx = self.context_cache.get_feedback_context()
+        context_text = cache_ctx.get('recent_text', '')
 
-        # 최근 컨텍스트 (약 30-45초)만 사용하여 토큰 절약
-        recent_context = self.context_window[-15:]
-        context_text = ' '.join(recent_context)
-
-        # 최소 단어 수 체크 (토큰 낭비 방지)
-        word_count = len(context_text.split())
-        if word_count < self.min_words_for_feedback:
+        if not context_text or len(context_text.split()) < self.min_words_for_feedback:
             return
 
         try:
-            feedback = await self.llm_service.generate_feedback(context_text)
+            # 전체 캐시 컨텍스트를 LLM에 전달 (주제, 이전 피드백 포함)
+            feedback = await self.llm_service.generate_feedback(context_text, cache_ctx)
 
             if feedback:
+                # 캐시에 피드백 기록 (중복 방지용)
+                self.context_cache.add_feedback(feedback)
+
                 elapsed = time.time() - self.start_time
                 await self.send(text_data=json.dumps({
                     'type': 'feedback',
@@ -149,25 +159,6 @@ class StreamConsumer(AsyncWebsocketConsumer):
                 }))
         except Exception as e:
             print(f'피드백 생성 오류: {str(e)}')
-
-    async def generate_summary(self):
-        """Generate summary when stream ends"""
-        if not self.transcript_buffer:
-            return
-
-        full_transcript = ' '.join(self.transcript_buffer)
-
-        try:
-            summary = await self.llm_service.generate_summary(full_transcript)
-
-            if summary:
-                await self.send(text_data=json.dumps({
-                    'type': 'summary',
-                    'content': summary,
-                    'timestamp': time.time() - self.start_time
-                }))
-        except Exception as e:
-            print(f'요약 생성 오류: {str(e)}')
 
     async def stop_streaming(self):
         self.is_streaming = False
