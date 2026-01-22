@@ -47,13 +47,16 @@
                         </svg>
                         <p>유튜브 URL을 입력하면 영상이 표시됩니다</p>
                     </div>
-                    <iframe
-                        id="youtube-iframe"
-                        style="display: none;"
-                        frameborder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowfullscreen>
-                    </iframe>
+                    <!-- Thumbnail fallback for videos that block embedding -->
+                    <a id="video-thumbnail-link" href="#" target="_blank" style="display: none;">
+                        <img id="video-thumbnail" src="" alt="Video Thumbnail">
+                        <div class="play-overlay">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="white">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                            <p>YouTube에서 보기</p>
+                        </div>
+                    </a>
                 </div>
                 <div class="video-info" id="video-info" style="display: none;">
                     <h3 id="video-title"></h3>
