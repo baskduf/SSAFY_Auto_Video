@@ -23,10 +23,12 @@ def validate_url(request):
         video_id = AudioProcessor.extract_video_id(url)
 
         if video_id:
+            # Add parameters to prevent Error 153
+            embed_url = f'https://www.youtube.com/embed/{video_id}?enablejsapi=1&origin={request.build_absolute_uri("/")[:-1]}&rel=0'
             return JsonResponse({
                 'valid': True,
                 'video_id': video_id,
-                'embed_url': f'https://www.youtube.com/embed/{video_id}'
+                'embed_url': embed_url
             })
         else:
             return JsonResponse({
