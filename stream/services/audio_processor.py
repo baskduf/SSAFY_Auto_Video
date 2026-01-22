@@ -199,13 +199,16 @@ class AudioProcessor:
         finally:
             await self.stop()
 
-    async def stream_audio_chunks(self, chunk_duration: float = 1.0) -> AsyncGenerator[bytes, None]:
+    async def stream_audio_chunks(self, chunk_duration: float = 1.0, overlap: float = 0.2) -> AsyncGenerator[bytes, None]:
         """
-        특정 시간 단위로 오디오 청크 스트리밍
+        특정 시간 단위로 오디오 청크 스트리밍 (오버랩으로 누락 방지)
         chunk_duration: 청크 길이 (초)
+        overlap: 청크 간 오버랩 비율 (0.0 ~ 0.5) - 경계 음성 누락 방지
         """
         bytes_per_second = self.sample_rate * 2  # 16-bit = 2 bytes per sample
         chunk_bytes = int(bytes_per_second * chunk_duration)
+        overlap_bytes = int(chunk_bytes * overlap)
+        step_bytes = chunk_bytes - overlap_bytes
 
         buffer = b''
 
@@ -214,7 +217,8 @@ class AudioProcessor:
 
             while len(buffer) >= chunk_bytes:
                 yield buffer[:chunk_bytes]
-                buffer = buffer[chunk_bytes:]
+                # 다음 청크를 위해 오버랩 부분 유지 (음성 경계 누락 방지)
+                buffer = buffer[step_bytes:]
 
         # Yield remaining buffer
         if buffer:
