@@ -41,11 +41,6 @@ class StreamApp {
         });
         this.urlInput.addEventListener('input', () => this.hideError());
 
-        // Tab switching
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
-        });
-
         // Check for URL parameter
         const urlParams = new URLSearchParams(window.location.search);
         const videoUrl = urlParams.get('url');
@@ -128,8 +123,11 @@ class StreamApp {
             </div>
         `;
 
-        this.highlightTab('summary');
-        this.switchTab('summary');
+        // Highlight summary panel
+        this.summaryContainer.closest('.panel')?.classList.add('highlight');
+        setTimeout(() => {
+            this.summaryContainer.closest('.panel')?.classList.remove('highlight');
+        }, 3000);
     }
 
     // Start streaming
@@ -303,8 +301,11 @@ class StreamApp {
 
         this.feedbacks.push({ content, timestamp });
 
-        // Show notification badge or switch tab
-        this.highlightTab('feedback');
+        // Highlight feedback panel briefly
+        this.feedbackContainer.closest('.panel')?.classList.add('highlight');
+        setTimeout(() => {
+            this.feedbackContainer.closest('.panel')?.classList.remove('highlight');
+        }, 2000);
     }
 
     // Format feedback content
@@ -343,28 +344,6 @@ class StreamApp {
         const wsStatus = this.connectionStatus.querySelector('.ws-status');
         wsStatus.className = 'ws-status ' + (connected ? 'connected' : 'disconnected');
         wsStatus.textContent = 'WebSocket: ' + (connected ? '연결됨' : '연결 안됨');
-    }
-
-    // Switch tab
-    switchTab(tabName) {
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.tab === tabName);
-        });
-
-        document.querySelectorAll('.tab-content').forEach(content => {
-            content.classList.toggle('active', content.id === `${tabName}-tab`);
-        });
-    }
-
-    // Highlight tab
-    highlightTab(tabName) {
-        const tab = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
-        if (tab && !tab.classList.contains('active')) {
-            tab.style.color = 'var(--warning-color)';
-            setTimeout(() => {
-                tab.style.color = '';
-            }, 2000);
-        }
     }
 
     // Clear containers

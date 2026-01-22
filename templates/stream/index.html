@@ -62,9 +62,8 @@
                 </div>
             </section>
 
-            <!-- Feedback Section -->
-            <section class="feedback-section">
-                <!-- Status Bar -->
+            <!-- Status Bar -->
+            <section class="status-section">
                 <div class="status-bar">
                     <div class="status-indicator" id="status-indicator">
                         <span class="status-dot"></span>
@@ -74,46 +73,42 @@
                         <span class="ws-status disconnected">WebSocket: 연결 안됨</span>
                     </div>
                 </div>
+            </section>
 
-                <!-- Tabs -->
-                <div class="tabs">
-                    <button class="tab-btn active" data-tab="transcript">
-                        실시간 자막
-                    </button>
-                    <button class="tab-btn" data-tab="feedback">
-                        AI 피드백
-                    </button>
-                    <button class="tab-btn" data-tab="summary">
-                        요약
-                    </button>
+            <!-- 3 Panel Layout -->
+            <section class="panels-section">
+                <!-- Transcript Panel -->
+                <div class="panel transcript-panel">
+                    <div class="panel-header">
+                        <h3>실시간 자막</h3>
+                    </div>
+                    <div class="panel-content" id="transcript-container">
+                        <div class="empty-state">
+                            <p>분석을 시작하면 실시간 자막이 표시됩니다</p>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Tab Contents -->
-                <div class="tab-contents">
-                    <!-- Transcript Tab -->
-                    <div class="tab-content active" id="transcript-tab">
-                        <div class="transcript-container" id="transcript-container">
-                            <div class="empty-state">
-                                <p>분석을 시작하면 실시간 자막이 표시됩니다</p>
-                            </div>
+                <!-- AI Feedback Panel -->
+                <div class="panel feedback-panel">
+                    <div class="panel-header">
+                        <h3>AI 피드백</h3>
+                    </div>
+                    <div class="panel-content" id="feedback-container">
+                        <div class="empty-state">
+                            <p>AI 피드백이 여기에 표시됩니다</p>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Feedback Tab -->
-                    <div class="tab-content" id="feedback-tab">
-                        <div class="feedback-container" id="feedback-container">
-                            <div class="empty-state">
-                                <p>AI 피드백이 여기에 표시됩니다</p>
-                            </div>
-                        </div>
+                <!-- Summary Panel -->
+                <div class="panel summary-panel">
+                    <div class="panel-header">
+                        <h3>요약</h3>
                     </div>
-
-                    <!-- Summary Tab -->
-                    <div class="tab-content" id="summary-tab">
-                        <div class="summary-container" id="summary-container">
-                            <div class="empty-state">
-                                <p>분석 종료 후 요약이 생성됩니다</p>
-                            </div>
+                    <div class="panel-content" id="summary-container">
+                        <div class="empty-state">
+                            <p>분석 종료 후 요약이 생성됩니다</p>
                         </div>
                     </div>
                 </div>

@@ -151,15 +151,73 @@ body {
 
 /* Main Content */
 .main-content {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 24px;
 }
 
-@media (max-width: 1024px) {
-    .main-content {
+/* Status Section */
+.status-section {
+    background-color: var(--bg-secondary);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* 3 Panel Layout */
+.panels-section {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    min-height: 400px;
+}
+
+@media (max-width: 1200px) {
+    .panels-section {
+        grid-template-columns: 1fr 1fr;
+    }
+    .panels-section .summary-panel {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 768px) {
+    .panels-section {
         grid-template-columns: 1fr;
     }
+    .panels-section .summary-panel {
+        grid-column: span 1;
+    }
+}
+
+/* Panel Styles */
+.panel {
+    background-color: var(--bg-secondary);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    max-height: 500px;
+}
+
+.panel-header {
+    padding: 14px 20px;
+    background-color: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.panel-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    scroll-behavior: smooth;
 }
 
 /* Video Section */
@@ -237,7 +295,7 @@ body {
     50% { opacity: 0.7; }
 }
 
-/* Feedback Section */
+/* Feedback Section (Legacy - kept for compatibility) */
 .feedback-section {
     background-color: var(--bg-secondary);
     border-radius: 16px;
@@ -247,6 +305,31 @@ body {
     flex-direction: column;
     max-height: calc(100vh - 300px);
     min-height: 500px;
+}
+
+/* Transcript Panel specific */
+.transcript-panel {
+    border-left: 3px solid var(--success-color);
+}
+
+/* Feedback Panel specific */
+.feedback-panel {
+    border-left: 3px solid var(--primary-color);
+}
+
+/* Summary Panel specific */
+.summary-panel {
+    border-left: 3px solid var(--warning-color);
+}
+
+/* Panel highlight effect */
+.panel.highlight {
+    animation: panelHighlight 0.5s ease;
+}
+
+@keyframes panelHighlight {
+    0% { box-shadow: 0 0 0 2px var(--primary-color); }
+    100% { box-shadow: var(--shadow); }
 }
 
 /* Status Bar */
