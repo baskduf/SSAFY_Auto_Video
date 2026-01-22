@@ -22,7 +22,6 @@ class StreamApp {
         this.connectionStatus = document.getElementById('connection-status');
         this.transcriptContainer = document.getElementById('transcript-container');
         this.feedbackContainer = document.getElementById('feedback-container');
-        this.summaryContainer = document.getElementById('summary-container');
 
         // State
         this.socket = null;
@@ -102,34 +101,11 @@ class StreamApp {
                 this.addFeedback(data.content, data.timestamp);
                 break;
 
-            case 'summary':
-                this.showSummary(data.content);
-                break;
-
             case 'error':
                 this.showError(data.message);
                 this.updateStatus('error', data.message);
                 break;
         }
-    }
-
-    // Show summary
-    showSummary(content) {
-        const emptyState = this.summaryContainer.querySelector('.empty-state');
-        if (emptyState) emptyState.remove();
-
-        this.summaryContainer.innerHTML = `
-            <div class="summary-content">
-                <h4>강의 요약</h4>
-                <div class="summary-text">${this.formatFeedback(content)}</div>
-            </div>
-        `;
-
-        // Highlight summary panel
-        this.summaryContainer.closest('.panel')?.classList.add('highlight');
-        setTimeout(() => {
-            this.summaryContainer.closest('.panel')?.classList.remove('highlight');
-        }, 3000);
     }
 
     // Start streaming
@@ -317,13 +293,41 @@ class StreamApp {
         }, 2000);
     }
 
-    // Format feedback content
+    // Format feedback content with markdown support
     formatFeedback(content) {
-        // Simple markdown-like formatting
-        return this.escapeHtml(content)
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/\n/g, '<br>');
+        // Process code blocks first (before escaping HTML)
+        let formatted = content;
+
+        // Handle fenced code blocks with language (```language\ncode```)
+        formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+            const langLabel = lang ? `<span class="code-lang">${lang}</span>` : '';
+            const escapedCode = this.escapeHtml(code.trim());
+            return `<div class="code-block-wrapper">${langLabel}<pre><code>${escapedCode}</code></pre></div>`;
+        });
+
+        // Handle inline code (`code`)
+        formatted = formatted.replace(/`([^`]+)`/g, (match, code) => {
+            return `<code>${this.escapeHtml(code)}</code>`;
+        });
+
+        // Handle bold (**text**)
+        formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+        // Handle italic (*text*)
+        formatted = formatted.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+        // Handle bullet lists (- item)
+        formatted = formatted.replace(/^- (.+)$/gm, '<li>$1</li>');
+        formatted = formatted.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+
+        // Handle newlines (outside of code blocks)
+        formatted = formatted.replace(/\n/g, '<br>');
+
+        // Clean up extra <br> after block elements
+        formatted = formatted.replace(/<\/pre><\/div><br>/g, '</pre></div>');
+        formatted = formatted.replace(/<\/ul><br>/g, '</ul>');
+
+        return formatted;
     }
 
     // Update status
@@ -358,7 +362,7 @@ class StreamApp {
     // Clear containers
     clearContainers() {
         this.transcriptContainer.innerHTML = '<div class="empty-state"><p>분석을 시작하면 실시간 자막이 표시됩니다</p></div>';
-        this.feedbackContainer.innerHTML = '<div class="empty-state"><p>AI 피드백이 여기에 표시됩니다</p></div>';
+        this.feedbackContainer.innerHTML = '<div class="empty-state"><p>강의 내용과 관련된 추가 학습 정보가 표시됩니다</p></div>';
         this.transcripts = [];
         this.feedbacks = [];
     }
