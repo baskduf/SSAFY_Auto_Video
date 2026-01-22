@@ -11,7 +11,8 @@ class StreamApp {
         this.stopBtn = document.getElementById('stop-btn');
         this.urlError = document.getElementById('url-error');
         this.videoPlaceholder = document.getElementById('video-placeholder');
-        this.youtubeIframe = document.getElementById('youtube-iframe');
+        this.videoThumbnailLink = document.getElementById('video-thumbnail-link');
+        this.videoThumbnail = document.getElementById('video-thumbnail');
         this.videoInfo = document.getElementById('video-info');
         this.videoTitle = document.getElementById('video-title');
         this.videoChannel = document.getElementById('video-channel');
@@ -146,8 +147,8 @@ class StreamApp {
             return;
         }
 
-        // Show video
-        this.showVideo(validation.embed_url);
+        // Show video thumbnail
+        this.showVideo(validation.video_id, url);
 
         // Get video info
         try {
@@ -249,11 +250,17 @@ class StreamApp {
         }
     }
 
-    // Show video iframe
-    showVideo(embedUrl) {
+    // Show video thumbnail (instead of iframe to avoid Error 153)
+    showVideo(videoId, originalUrl) {
         this.videoPlaceholder.style.display = 'none';
-        this.youtubeIframe.src = embedUrl;
-        this.youtubeIframe.style.display = 'block';
+        // Use high quality thumbnail
+        this.videoThumbnail.src = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+        this.videoThumbnail.onerror = () => {
+            // Fallback to standard quality if maxres not available
+            this.videoThumbnail.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+        };
+        this.videoThumbnailLink.href = originalUrl;
+        this.videoThumbnailLink.style.display = 'flex';
     }
 
     // Show video info
@@ -380,7 +387,10 @@ class StreamApp {
     }
 
     scrollToBottom(container) {
-        container.scrollTop = container.scrollHeight;
+        // Use requestAnimationFrame to ensure DOM is updated
+        requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
+        });
     }
 
     formatTimestamp(timestamp) {
