@@ -18,7 +18,8 @@ class StreamConsumer(AsyncWebsocketConsumer):
         self.transcript_buffer = []
         self.context_window = []
         self.last_feedback_time = 0
-        self.feedback_interval = 25  # seconds
+        self.feedback_interval = 45  # 토큰 절약: 25초 → 45초
+        self.min_words_for_feedback = 100  # 최소 단어 수 이상일 때만 피드백
         self.start_time = 0
 
     async def connect(self):
@@ -78,8 +79,8 @@ class StreamConsumer(AsyncWebsocketConsumer):
         try:
             await self.send_status('extracting', '오디오 스트림 추출 중...')
 
-            # Use chunk-based streaming (3 seconds per chunk)
-            async for audio_chunk in self.audio_processor.stream_audio_chunks(chunk_duration=3.0):
+            # 2초 청크 + 20% 오버랩으로 음성 누락 방지
+            async for audio_chunk in self.audio_processor.stream_audio_chunks(chunk_duration=2.0, overlap=0.2):
                 if not self.is_streaming:
                     break
 
@@ -123,15 +124,17 @@ class StreamConsumer(AsyncWebsocketConsumer):
                 await self.generate_summary()
 
     async def generate_feedback(self):
-        """Generate AI feedback based on context"""
+        """Generate AI feedback based on context (토큰 절약 로직 포함)"""
         if not self.context_window or len(self.context_window) < 3:
             return
 
-        # Use recent context (last ~60 seconds)
-        recent_context = self.context_window[-20:]
+        # 최근 컨텍스트 (약 30-45초)만 사용하여 토큰 절약
+        recent_context = self.context_window[-15:]
         context_text = ' '.join(recent_context)
 
-        if len(context_text) < 50:
+        # 최소 단어 수 체크 (토큰 낭비 방지)
+        word_count = len(context_text.split())
+        if word_count < self.min_words_for_feedback:
             return
 
         try:

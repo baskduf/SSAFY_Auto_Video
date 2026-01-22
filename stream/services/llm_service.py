@@ -25,21 +25,11 @@ class LLMService:
 # 추천 (속도/비용 최적화)
             self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
 
-        self.system_prompt = """당신은 실시간 강의 보조 AI입니다.
-강의 내용을 분석하여 학습자에게 도움이 되는 즉각적인 피드백을 제공합니다.
-
-역할:
-1. 어려운 용어나 개념에 대한 간단한 정의 제공
-2. 핵심 포인트 요약
-3. 보충 설명이 필요한 부분 추가 설명
-4. 관련 개념이나 예시 제시
-
-규칙:
-- 응답은 반드시 한국어로 작성
-- 간결하고 명확하게 2-3문장으로 답변
-- 강의 흐름을 방해하지 않도록 핵심만 전달
-- 학습자가 이해하기 쉬운 표현 사용
-- 불필요한 서론이나 인사말 제외"""
+        # 토큰 절약을 위한 간결한 시스템 프롬프트
+        self.system_prompt = """강의 보조 AI. 한국어로 2문장 이내 핵심 피드백 제공.
+- 전문 용어 → 쉬운 설명
+- 핵심 포인트 강조
+- 인사말/서론 제외"""
 
     async def generate_feedback(self, context: str) -> Optional[str]:
         """
@@ -52,20 +42,20 @@ class LLMService:
             return self._fallback_response(context)
 
         try:
+            # 토큰 절약: 간결한 프롬프트
             prompt = f"""{self.system_prompt}
 
-현재 강의 내용:
-\"\"\"{context}\"\"\"
+강의: {context[:500]}
 
-위 내용을 바탕으로 학습자에게 도움이 될 보충 설명, 용어 정의, 또는 핵심 요약을 제공하세요."""
+핵심 피드백:"""
 
             # Run in thread pool to avoid blocking
             response = await asyncio.to_thread(
                 self.model.generate_content,
                 prompt,
                 generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=300,
-                    temperature=0.7
+                    max_output_tokens=150,  # 토큰 절약: 300 → 150
+                    temperature=0.5  # 더 일관된 응답
                 )
             )
 
@@ -86,22 +76,21 @@ class LLMService:
             return None
 
         try:
-            prompt = f"""다음 강의 내용을 핵심 포인트 위주로 요약해주세요.
+            # 토큰 절약: 최대 2000자까지만 사용
+            transcript_trimmed = full_transcript[:2000]
+            prompt = f"""강의 요약 (한국어, 간결하게):
+{transcript_trimmed}
 
-강의 내용:
-\"\"\"{full_transcript}\"\"\"
-
-요약 형식:
-- 주요 주제:
-- 핵심 개념:
-- 중요 포인트:"""
+- 주제:
+- 핵심:
+- 포인트:"""
 
             response = await asyncio.to_thread(
                 self.model.generate_content,
                 prompt,
                 generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=500,
-                    temperature=0.5
+                    max_output_tokens=300,  # 토큰 절약: 500 → 300
+                    temperature=0.3
                 )
             )
 
