@@ -47,6 +47,14 @@
                         </svg>
                         <p>유튜브 URL을 입력하면 영상이 표시됩니다</p>
                     </div>
+                    <!-- YouTube iframe (primary) -->
+                    <iframe
+                        id="youtube-iframe"
+                        style="display: none;"
+                        frameborder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowfullscreen>
+                    </iframe>
                     <!-- Thumbnail fallback for videos that block embedding -->
                     <a id="video-thumbnail-link" href="#" target="_blank" style="display: none;">
                         <img id="video-thumbnail" src="" alt="Video Thumbnail">

@@ -11,6 +11,7 @@ class StreamApp {
         this.stopBtn = document.getElementById('stop-btn');
         this.urlError = document.getElementById('url-error');
         this.videoPlaceholder = document.getElementById('video-placeholder');
+        this.youtubeIframe = document.getElementById('youtube-iframe');
         this.videoThumbnailLink = document.getElementById('video-thumbnail-link');
         this.videoThumbnail = document.getElementById('video-thumbnail');
         this.videoInfo = document.getElementById('video-info');
@@ -147,8 +148,8 @@ class StreamApp {
             return;
         }
 
-        // Show video thumbnail
-        this.showVideo(validation.video_id, url);
+        // Show video (try iframe first, fallback to thumbnail)
+        this.showVideo(validation.video_id, validation.embed_url, url);
 
         // Get video info
         try {
@@ -250,13 +251,14 @@ class StreamApp {
         }
     }
 
-    // Show video thumbnail (instead of iframe to avoid Error 153)
-    showVideo(videoId, originalUrl) {
+    // Show video thumbnail only (iframe embedding often blocked)
+    showVideo(videoId, embedUrl, originalUrl) {
         this.videoPlaceholder.style.display = 'none';
-        // Use high quality thumbnail
+        this.youtubeIframe.style.display = 'none';
+
+        // Show thumbnail with link to YouTube
         this.videoThumbnail.src = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
         this.videoThumbnail.onerror = () => {
-            // Fallback to standard quality if maxres not available
             this.videoThumbnail.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
         };
         this.videoThumbnailLink.href = originalUrl;
