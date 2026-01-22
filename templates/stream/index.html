@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 유튜브 강의 AI 피드백 시스템</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>실시간 유튜브 강의 AI 피드백 시스템</h1>
+            <p class="subtitle">유튜브 라이브/영상의 실시간 AI 학습 보조</p>
+        </header>
+
+        <!-- URL Input Section -->
+        <section class="url-section">
+            <div class="url-input-wrapper">
+                <input
+                    type="text"
+                    id="youtube-url"
+                    placeholder="유튜브 URL을 입력하세요 (예: https://youtube.com/watch?v=...)"
+                    autocomplete="off"
+                >
+                <button id="start-btn" class="btn btn-primary">
+                    <span class="btn-text">분석 시작</span>
+                    <span class="btn-loading" style="display: none;">
+                        <span class="spinner"></span>
+                    </span>
+                </button>
+                <button id="stop-btn" class="btn btn-danger" style="display: none;">
+                    분석 중지
+                </button>
+            </div>
+            <div id="url-error" class="error-message" style="display: none;"></div>
+        </section>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Video Section -->
+            <section class="video-section">
+                <div class="video-container" id="video-container">
+                    <div class="video-placeholder" id="video-placeholder">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                        <p>유튜브 URL을 입력하면 영상이 표시됩니다</p>
+                    </div>
+                    <iframe
+                        id="youtube-iframe"
+                        style="display: none;"
+                        frameborder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowfullscreen>
+                    </iframe>
+                </div>
+                <div class="video-info" id="video-info" style="display: none;">
+                    <h3 id="video-title"></h3>
+                    <span id="video-channel"></span>
+                    <span id="video-live-badge" class="live-badge" style="display: none;">LIVE</span>
+                </div>
+            </section>
+
+            <!-- Feedback Section -->
+            <section class="feedback-section">
+                <!-- Status Bar -->
+                <div class="status-bar">
+                    <div class="status-indicator" id="status-indicator">
+                        <span class="status-dot"></span>
+                        <span class="status-text">대기 중</span>
+                    </div>
+                    <div class="connection-status" id="connection-status">
+                        <span class="ws-status disconnected">WebSocket: 연결 안됨</span>
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="transcript">
+                        실시간 자막
+                    </button>
+                    <button class="tab-btn" data-tab="feedback">
+                        AI 피드백
+                    </button>
+                    <button class="tab-btn" data-tab="summary">
+                        요약
+                    </button>
+                </div>
+
+                <!-- Tab Contents -->
+                <div class="tab-contents">
+                    <!-- Transcript Tab -->
+                    <div class="tab-content active" id="transcript-tab">
+                        <div class="transcript-container" id="transcript-container">
+                            <div class="empty-state">
+                                <p>분석을 시작하면 실시간 자막이 표시됩니다</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Feedback Tab -->
+                    <div class="tab-content" id="feedback-tab">
+                        <div class="feedback-container" id="feedback-container">
+                            <div class="empty-state">
+                                <p>AI 피드백이 여기에 표시됩니다</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary Tab -->
+                    <div class="tab-content" id="summary-tab">
+                        <div class="summary-container" id="summary-container">
+                            <div class="empty-state">
+                                <p>분석 종료 후 요약이 생성됩니다</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Powered by Django Channels, Deepgram, Google Gemini</p>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
