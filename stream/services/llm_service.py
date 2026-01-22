@@ -25,15 +25,25 @@ class LLMService:
 # 추천 (속도/비용 최적화)
             self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
 
-        # 토큰 절약을 위한 간결한 시스템 프롬프트
-        self.system_prompt = """강의 보조 AI. 한국어로 2문장 이내 핵심 피드백 제공.
-- 전문 용어 → 쉬운 설명
-- 핵심 포인트 강조
-- 인사말/서론 제외"""
+        # 추가 학습 정보 제공 프롬프트
+        self.system_prompt = """당신은 실시간 강의 학습 보조 AI입니다.
+강사가 설명하는 개념에 대해 **추가 학습 정보**를 제공합니다.
 
-    async def generate_feedback(self, context: str) -> Optional[str]:
+역할:
+- 언급된 기술/개념의 관련 함수, 메서드, 사용법 추가 설명
+- 실용적인 코드 예시 제공 (마크다운 코드블록 사용)
+- 관련된 심화 개념이나 팁 제공
+
+예시: 강사가 "AJAX"를 설명하면 → fetch API, axios 사용법, async/await 패턴 등 추가 정보 제공
+
+응답 형식:
+- 한국어로 간결하게 (3-4문장)
+- 코드가 있으면 ```언어 코드블록 사용
+- 요약하지 말고, 학습자가 더 알면 좋을 정보만 제공"""
+
+    async def generate_feedback(self, context: str, cache_context: dict = None) -> Optional[str]:
         """
-        강의 맥락을 기반으로 피드백 생성
+        캐시된 맥락을 활용한 실시간 추가 학습 정보 생성
         """
         if not GEMINI_AVAILABLE:
             return self._fallback_response(context)
@@ -42,20 +52,38 @@ class LLMService:
             return self._fallback_response(context)
 
         try:
-            # 토큰 절약: 간결한 프롬프트
+            # 캐시에서 맥락 정보 추출
+            context_hints = []
+            if cache_context:
+                # 주요 주제 (빈도순)
+                topics = cache_context.get('top_topics', [])
+                if topics:
+                    topic_str = ', '.join([f"{t[0]}" for t in topics[:5]])
+                    context_hints.append(f"지금까지 주요 주제: {topic_str}")
+
+                # 이전 피드백 (중복 방지)
+                last_feedback = cache_context.get('last_feedback')
+                if last_feedback:
+                    context_hints.append(f"이전 피드백 요약: {last_feedback[:80]}...")
+
+            context_info = "\n".join(context_hints) if context_hints else ""
+
             prompt = f"""{self.system_prompt}
 
-강의: {context[:500]}
+{context_info}
 
-핵심 피드백:"""
+[현재 강의 내용]
+{context[:500]}
+
+추가 학습 정보 (이전 피드백과 중복되지 않게):"""
 
             # Run in thread pool to avoid blocking
             response = await asyncio.to_thread(
                 self.model.generate_content,
                 prompt,
                 generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=150,  # 토큰 절약: 300 → 150
-                    temperature=0.5  # 더 일관된 응답
+                    max_output_tokens=300,  # 코드 예시 포함을 위해 증가
+                    temperature=0.7  # 다양한 정보 제공
                 )
             )
 
