@@ -19,8 +19,8 @@ class StreamConsumer(AsyncWebsocketConsumer):
         self.is_streaming = False
         self.transcript_buffer = []
         self.last_feedback_time = 0
-        self.feedback_interval = 20  # API 제한 고려 (분당 10회 = 6초마다 가능하지만 여유있게)
-        self.min_words_for_feedback = 30  # 의미있는 컨텐츠 확보
+        self.feedback_interval = 30  # 30초마다 피드백 (분당 2회) - Rate Limit 안정화
+        self.min_words_for_feedback = 15  # 빠른 피드백을 위해 완화
         self.start_time = 0
 
     async def connect(self):
@@ -90,6 +90,7 @@ class StreamConsumer(AsyncWebsocketConsumer):
 
                 # Send audio chunk to STT
                 transcript = await self.stt_service.transcribe(audio_chunk)
+                print(f"[STT] Result: '{transcript[:50] if transcript else 'None'}...' ({len(transcript) if transcript else 0} chars)", flush=True)
 
                 if transcript and transcript.strip():
                     self.transcript_buffer.append(transcript)
@@ -105,29 +106,15 @@ class StreamConsumer(AsyncWebsocketConsumer):
                         'timestamp': elapsed
                     }))
 
-                    # 스마트 피드백 트리거 (API 제한 고려)
+                    # 피드백 트리거 (간단화)
                     current_time = time.time()
                     time_since_last = current_time - self.last_feedback_time
-                    topic_changed = analysis.get('topic_changed', False)
-                    has_new_keywords = len(analysis.get('keywords', [])) >= 3
 
-                    # 최소 10초 간격 보장 (API 레이트 리밋 보호)
-                    min_interval = 10
-
-                    # 조건 1: 기본 시간 간격 충족 (20초)
-                    # 조건 2: 주제 변화 감지 (10초 이상 경과)
-                    # 조건 3: 새 키워드 3개 이상 (15초 이상 경과)
-                    should_trigger = (
-                        time_since_last >= self.feedback_interval or
-                        (topic_changed and time_since_last >= min_interval) or
-                        (has_new_keywords and time_since_last >= 15)
-                    )
-
-                    if should_trigger:
-                        trigger = self.context_cache.should_generate_feedback(self.min_words_for_feedback)
-                        if trigger.get('should', False):
-                            asyncio.create_task(self.generate_feedback())
-                            self.last_feedback_time = current_time
+                    # 15초마다 피드백 생성
+                    if time_since_last >= self.feedback_interval:
+                        print(f"[Time Check] {time_since_last:.1f}s elapsed, generating feedback...", flush=True)
+                        asyncio.create_task(self.generate_feedback())
+                        self.last_feedback_time = current_time
 
         except asyncio.CancelledError:
             pass
@@ -139,29 +126,33 @@ class StreamConsumer(AsyncWebsocketConsumer):
 
     async def generate_feedback(self):
         """컨텍스트 캐시 기반 실시간 AI 피드백 생성"""
-        # 캐시에서 전체 컨텍스트 가져오기
         cache_ctx = self.context_cache.get_feedback_context()
         context_text = cache_ctx.get('recent_text', '')
+        word_count = len(context_text.split()) if context_text else 0
 
-        if not context_text or len(context_text.split()) < self.min_words_for_feedback:
+        print(f"[Feedback] Context words: {word_count}, min required: {self.min_words_for_feedback}", flush=True)
+
+        if word_count < self.min_words_for_feedback:
+            print(f"[Feedback] Skipped - not enough words", flush=True)
             return
 
         try:
-            # 전체 캐시 컨텍스트를 LLM에 전달 (주제, 이전 피드백 포함)
+            print(f"[Feedback] Calling LLM API...", flush=True)
             feedback = await self.llm_service.generate_feedback(context_text, cache_ctx)
 
             if feedback:
-                # 캐시에 피드백 기록 (중복 방지용)
                 self.context_cache.add_feedback(feedback)
-
                 elapsed = time.time() - self.start_time
+                print(f"[Feedback] Success! Sending to client at {elapsed:.1f}s", flush=True)
                 await self.send(text_data=json.dumps({
                     'type': 'feedback',
                     'content': feedback,
                     'timestamp': elapsed
                 }))
+            else:
+                print(f"[Feedback] LLM returned None", flush=True)
         except Exception as e:
-            print(f'피드백 생성 오류: {str(e)}')
+            print(f'[Feedback] Error: {str(e)}', flush=True)
 
     async def stop_streaming(self):
         self.is_streaming = False

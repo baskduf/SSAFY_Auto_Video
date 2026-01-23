@@ -57,8 +57,8 @@ class LLMService:
     레이트 리미팅 포함 (무료 API 제한 대응)
     """
 
-    # 클래스 레벨 레이트 리미터 (모든 인스턴스 공유)
-    _rate_limiter = RateLimiter(max_calls=10, period=60.0)
+    # 클래스 레벨 레이트 리미터 (모든 인스턴스 공유) - 보수적 설정
+    _rate_limiter = RateLimiter(max_calls=4, period=60.0)  # 분당 4회로 제한 (안전하게)
 
     def __init__(self):
         self.api_key = settings.GOOGLE_API_KEY
@@ -98,7 +98,7 @@ class LLMService:
         # 레이트 리밋 체크
         if not self._rate_limiter.can_call():
             wait_time = self._rate_limiter.time_until_next()
-            print(f'[Rate Limit] API 호출 대기 중... {wait_time:.1f}초')
+            print(f'[Rate Limit] API 호출 대기 중... {wait_time:.1f}초', flush=True)
             return None  # 호출 건너뛰기
 
         try:
@@ -147,8 +147,8 @@ class LLMService:
             error_msg = str(e).lower()
             # 레이트 리밋 에러 감지
             if 'rate' in error_msg or 'quota' in error_msg or '429' in error_msg:
-                print(f'[Rate Limit] API 제한 감지, 30초 백오프')
-                self._rate_limiter.trigger_backoff(30.0)
+                print(f'[Rate Limit] API 제한 감지, 60초 백오프', flush=True)
+                self._rate_limiter.trigger_backoff(60.0)  # 백오프 시간 증가
                 return None
             print(f'LLM 피드백 생성 오류: {str(e)}')
             return self._fallback_response(context)
